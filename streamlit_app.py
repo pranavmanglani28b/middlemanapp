@@ -4,7 +4,7 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 import json
 import time
-
+st.set_page_config('Middleman Service')
 # --- Setup Instructions ---
 # 1. Go to Firebase Console (https://console.firebase.google.com/)
 # 2. Create a new project.
