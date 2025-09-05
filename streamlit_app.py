@@ -1,133 +1,100 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Trade Middleman</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 600px; margin: auto; }
-        .trade-section { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
-        .exchanged { background: #e0ffe0; }
-        .hidden { display: none; }
-        label { display: block; margin-top: 10px; }
-        input[type="text"], input[type="password"] { width: 100%; padding: 8px; margin-top: 4px; }
-        button { margin-top: 15px; padding: 10px 20px; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h2>Trade Middleman</h2>
-    <div id="join-section" class="trade-section">
-        <label for="tradeCode">Enter Trade Code to Join:</label>
-        <input type="text" id="tradeCode" maxlength="12" placeholder="Trade Code">
-        <button onclick="joinTrade()">Join Trade</button>
-        <div id="join-error" style="color:red; margin-top:10px;"></div>
-    </div>
+import streamlit as st
 
-    <div id="trade-section" class="trade-section hidden">
-        <h3>Trade Code: <span id="showTradeCode"></span></h3>
-        <label for="userName">Your Name:</label>
-        <input type="text" id="userName" maxlength="32" placeholder="Enter your name">
+def reset_state():
+    """Resets all session state variables to their initial values."""
+    st.session_state.user_a_data = ""
+    st.session_state.user_b_data = ""
+    st.session_state.user_a_confirmed = False
+    st.session_state.user_b_confirmed = False
+    st.session_state.exchange_complete = False
 
-        <label for="userDetails">Your Details:</label>
-        <input type="text" id="userDetails" maxlength="128" placeholder="Enter your details">
+# --- Initialize Session State ---
+# This ensures variables persist across user interactions.
+if 'user_a_data' not in st.session_state:
+    reset_state()
 
-        <button onclick="submitDetails()">Submit Details</button>
-        <div id="wait-msg" style="margin-top:10px;"></div>
-    </div>
+# --- Page Layout and Introduction ---
+st.title("🤝 Secure Exchange Middleman")
+st.markdown("This app facilitates a secure exchange of information between two parties. The data is only revealed when both parties have submitted and confirmed their details.")
 
-    <div id="exchange-section" class="trade-section hidden exchanged">
-        <h3>Trade Complete!</h3>
-        <div>
-            <strong>Your Partner:</strong> <span id="partnerName"></span><br>
-            <strong>Partner's Details:</strong> <span id="partnerDetails"></span>
-        </div>
-    </div>
-</div>
+st.warning("Note: This app uses Streamlit's session_state for a simple demo. For a real-world application, a database would be required to manage sessions between different users and devices.")
 
-<script>
-    // In-memory store for demo (would be server-side in real app)
-    const trades = {};
+# --- User Selection ---
+st.header("Select Your Role")
+# The user selects if they are User A or User B.
+user_role = st.radio(
+    "Are you User A or User B?",
+    ('User A', 'User B'),
+    help="Select your role to begin the exchange."
+)
 
-    let currentTradeCode = '';
-    let currentUserId = '';
-    let partnerUserId = '';
+# --- User Input and Confirmation ---
+col1, col2 = st.columns(2)
 
-    function joinTrade() {
-        const code = document.getElementById('tradeCode').value.trim();
-        const errorDiv = document.getElementById('join-error');
-        if (!code) {
-            errorDiv.textContent = "Please enter a trade code.";
-            return;
-        }
-        errorDiv.textContent = "";
-        currentTradeCode = code;
-        currentUserId = Math.random().toString(36).substr(2, 9);
+with col1:
+    st.subheader("User A")
+    # Display the input form for User A if not confirmed yet.
+    if not st.session_state.user_a_confirmed:
+        user_a_input = st.text_area(
+            "Enter your information here (User A):",
+            value=st.session_state.user_a_data,
+            height=150,
+            key="user_a_area",
+            disabled=(user_role != 'User A')
+        )
+        if user_a_input:
+            st.session_state.user_a_data = user_a_input
+            if st.button("Confirm Details (User A)", key="confirm_a", disabled=(user_role != 'User A')):
+                st.session_state.user_a_confirmed = True
+                st.experimental_rerun()
+    else:
+        st.success("User A has confirmed their details.")
 
-        // Create or join trade
-        if (!trades[code]) {
-            trades[code] = {};
-        }
-        if (Object.keys(trades[code]).length >= 2) {
-            errorDiv.textContent = "This trade code is full. Try another.";
-            return;
-        }
-        trades[code][currentUserId] = { name: '', details: '', ready: false };
+with col2:
+    st.subheader("User B")
+    # Display the input form for User B if not confirmed yet.
+    if not st.session_state.user_b_confirmed:
+        user_b_input = st.text_area(
+            "Enter your information here (User B):",
+            value=st.session_state.user_b_data,
+            height=150,
+            key="user_b_area",
+            disabled=(user_role != 'User B')
+        )
+        if user_b_input:
+            st.session_state.user_b_data = user_b_input
+            if st.button("Confirm Details (User B)", key="confirm_b", disabled=(user_role != 'User B')):
+                st.session_state.user_b_confirmed = True
+                st.experimental_rerun()
+    else:
+        st.success("User B has confirmed their details.")
 
-        document.getElementById('join-section').classList.add('hidden');
-        document.getElementById('trade-section').classList.remove('hidden');
-        document.getElementById('showTradeCode').textContent = code;
+# --- Exchange Logic ---
+st.divider()
+st.header("Exchange Status")
 
-        pollForPartner();
-    }
+# Check if both users have confirmed.
+if st.session_state.user_a_confirmed and st.session_state.user_b_confirmed:
+    st.session_state.exchange_complete = True
+    st.balloons()
+    st.success("✅ Exchange complete! Both parties have confirmed.")
+    
+    # Reveal the data to the appropriate user.
+    if user_role == 'User A':
+        st.info("Here is the information from the other party (User B):")
+        st.code(st.session_state.user_b_data, language="text")
+    elif user_role == 'User B':
+        st.info("Here is the information from the other party (User A):")
+        st.code(st.session_state.user_a_data, language="text")
 
-    function submitDetails() {
-        const name = document.getElementById('userName').value.trim();
-        const details = document.getElementById('userDetails').value.trim();
-        if (!name || !details) {
-            alert("Please enter your name and details.");
-            return;
-        }
-        trades[currentTradeCode][currentUserId] = { name, details, ready: true };
-        document.getElementById('wait-msg').textContent = "Waiting for your trade partner to submit details...";
+# If the exchange is not complete, show the waiting message.
+elif st.session_state.user_a_data or st.session_state.user_b_data:
+    st.info("Waiting for both parties to confirm their details...")
+else:
+    st.info("Please enter your details and confirm to begin the exchange.")
 
-        pollForExchange();
-    }
-
-    function pollForPartner() {
-        // Check if another user has joined
-        const interval = setInterval(() => {
-            const users = Object.keys(trades[currentTradeCode]);
-            if (users.length === 2) {
-                partnerUserId = users.find(uid => uid !== currentUserId);
-                clearInterval(interval);
-            }
-        }, 1000);
-    }
-
-    function pollForExchange() {
-        // Wait for both users to be ready
-        const interval = setInterval(() => {
-            const trade = trades[currentTradeCode];
-            if (!trade) return;
-            const users = Object.keys(trade);
-            if (users.length < 2) return;
-            const partnerId = users.find(uid => uid !== currentUserId);
-            partnerUserId = partnerId;
-            if (trade[currentUserId].ready && trade[partnerId].ready) {
-                clearInterval(interval);
-                showExchange();
-            }
-        }, 1000);
-    }
-
-    function showExchange() {
-        const trade = trades[currentTradeCode];
-        document.getElementById('trade-section').classList.add('hidden');
-        document.getElementById('exchange-section').classList.remove('hidden');
-        document.getElementById('partnerName').textContent = trade[partnerUserId].name;
-        document.getElementById('partnerDetails').textContent = trade[partnerUserId].details;
-    }
-</script>
-</body>
-</html>
+# --- Reset Button ---
+st.divider()
+if st.button("Start New Exchange", help="Click to reset the state and start over."):
+    reset_state()
+    st.experimental_rerun()
