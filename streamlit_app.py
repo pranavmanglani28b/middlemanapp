@@ -1,100 +1,133 @@
 import streamlit as st
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+import json
+import time
 
-def reset_state():
-    """Resets all session state variables to their initial values."""
-    st.session_state.user_a_data = ""
-    st.session_state.user_b_data = ""
-    st.session_state.user_a_confirmed = False
-    st.session_state.user_b_confirmed = False
-    st.session_state.exchange_complete = False
+# --- Setup Instructions ---
+# 1. Go to Firebase Console (https://console.firebase.google.com/)
+# 2. Create a new project.
+# 3. Go to Project Settings -> Service Accounts.
+# 4. Click "Generate new private key".
+# 5. This will download a JSON file. Rename it to `firebase_key.json` and save it in the same directory as this script.
+# 6. Go to Firestore Database and create a new database in "production mode".
+# 7. Add security rules to allow read/write access for demonstration purposes:
+#    rules_version = '2';
+#    service cloud.firestore {
+#      match /databases/{database}/documents {
+#        match /{document=**} {
+#          allow read, write: if true;
+#        }
+#      }
+#    }
 
-# --- Initialize Session State ---
-# This ensures variables persist across user interactions.
-if 'user_a_data' not in st.session_state:
-    reset_state()
+@st.cache_resource
+def get_firestore_client():
+    """Initializes and returns a Firebase Firestore client."""
+    try:
+        # Load the Firebase service account key from the file.
+        # This file should be placed in the same directory as this script.
+        # For security, you should use environment variables in production.
+        cred = credentials.Certificate("firebase_key.json")
+        firebase_admin.initialize_app(cred)
+    except ValueError as e:
+        if "The default Firebase app already exists" not in str(e):
+            st.error(f"Error initializing Firebase: {e}. Please ensure 'firebase_key.json' is in the correct location and is a valid service account file.")
+            st.stop()
+    return firestore.client()
 
-# --- Page Layout and Introduction ---
-st.title("🤝 Secure Exchange Middleman")
-st.markdown("This app facilitates a secure exchange of information between two parties. The data is only revealed when both parties have submitted and confirmed their details.")
+# --- Initialize Firestore Client ---
+db = get_firestore_client()
 
-st.warning("Note: This app uses Streamlit's `session_state` for a simple demo. For a real-world application, a database would be required to manage sessions between different users and devices.")
+# --- Main App Logic ---
+st.title("🤝 Secure Exchange Middleman (Multi-User)")
+st.markdown("Enter a shared Exchange ID to join a session with another person. The data is only revealed when both parties confirm.")
 
-# --- User Selection ---
-st.header("Select Your Role")
-# The user selects if they are User A or User B.
-user_role = st.radio(
+# --- Session Management ---
+exchange_id = st.text_input(
+    "Enter a shared Exchange ID", 
+    help="Both users must enter the same ID to join the same exchange."
+).strip()
+
+if not exchange_id:
+    st.info("Please enter a shared Exchange ID to begin.")
+    st.stop()
+
+# Get a reference to the specific document for this exchange.
+exchange_ref = db.collection("exchanges").document(exchange_id)
+
+# --- User Roles and Data ---
+st.header("Your Information")
+your_role = st.radio(
     "Are you User A or User B?",
     ('User A', 'User B'),
-    help="Select your role to begin the exchange."
+    key="user_role"
 )
 
-# --- User Input and Confirmation ---
-col1, col2 = st.columns(2)
+# Fetch the current state of the exchange from Firestore.
+@st.cache_data(show_spinner="Fetching exchange status...")
+def get_exchange_status():
+    doc = exchange_ref.get()
+    return doc.to_dict() if doc.exists else None
 
-with col1:
-    st.subheader("User A")
-    # Display the input form for User A if not confirmed yet.
-    if not st.session_state.user_a_confirmed:
-        user_a_input = st.text_area(
-            "Enter your information here (User A):",
-            value=st.session_state.user_a_data,
-            height=150,
-            key="user_a_area",
-            disabled=(user_role != 'User A')
-        )
-        if user_a_input:
-            st.session_state.user_a_data = user_a_input
-            if st.button("Confirm Details (User A)", key="confirm_a", disabled=(user_role != 'User A')):
-                st.session_state.user_a_confirmed = True
-                st.rerun()
-    else:
-        st.success("User A has confirmed their details.")
+exchange_data = get_exchange_status()
 
-with col2:
-    st.subheader("User B")
-    # Display the input form for User B if not confirmed yet.
-    if not st.session_state.user_b_confirmed:
-        user_b_input = st.text_area(
-            "Enter your information here (User B):",
-            value=st.session_state.user_b_data,
-            height=150,
-            key="user_b_area",
-            disabled=(user_role != 'User B')
-        )
-        if user_b_input:
-            st.session_state.user_b_data = user_b_input
-            if st.button("Confirm Details (User B)", key="confirm_b", disabled=(user_role != 'User B')):
-                st.session_state.user_b_confirmed = True
-                st.rerun()
-    else:
-        st.success("User B has confirmed their details.")
+# --- User Input Form ---
+if your_role == 'User A':
+    my_data_key = 'user_a_data'
+    my_confirmed_key = 'user_a_confirmed'
+    other_data_key = 'user_b_data'
+elif your_role == 'User B':
+    my_data_key = 'user_b_data'
+    my_confirmed_key = 'user_b_confirmed'
+    other_data_key = 'user_a_data'
 
-# --- Exchange Logic ---
+my_confirmed_status = exchange_data.get(my_confirmed_key, False)
+other_confirmed_status = exchange_data.get(other_data_key.replace('_data', '_confirmed'), False)
+
+if not my_confirmed_status:
+    my_input = st.text_area(
+        f"Enter your information here ({your_role}):",
+        value=exchange_data.get(my_data_key, ""),
+        height=150,
+        key="my_area"
+    )
+
+    if st.button("Confirm Details"):
+        with st.spinner("Uploading data and confirming..."):
+            exchange_ref.set({
+                my_data_key: my_input,
+                my_confirmed_key: True
+            }, merge=True)
+        st.success("Details confirmed. Waiting for the other party.")
+        st.rerun()
+else:
+    st.success(f"{your_role} has confirmed their details.")
+
+# --- Exchange Status ---
 st.divider()
 st.header("Exchange Status")
 
-# Check if both users have confirmed.
-if st.session_state.user_a_confirmed and st.session_state.user_b_confirmed:
-    st.session_state.exchange_complete = True
+if my_confirmed_status and other_confirmed_status:
     st.balloons()
     st.success("✅ Exchange complete! Both parties have confirmed.")
-    
-    # Reveal the data to the appropriate user.
-    if user_role == 'User A':
-        st.info("Here is the information from the other party (User B):")
-        st.code(st.session_state.user_b_data, language="text")
-    elif user_role == 'User B':
-        st.info("Here is the information from the other party (User A):")
-        st.code(st.session_state.user_a_data, language="text")
+    st.info("Here is the information from the other party:")
+    st.code(exchange_data.get(other_data_key, "No data available."), language="text")
 
-# If the exchange is not complete, show the waiting message.
-elif st.session_state.user_a_data or st.session_state.user_b_data:
+elif exchange_data.get('user_a_confirmed', False) or exchange_data.get('user_b_confirmed', False):
     st.info("Waiting for both parties to confirm their details...")
+    # Add a refresh button for the user to check the status.
+    if st.button("Check for Updates"):
+        st.rerun()
+
 else:
-    st.info("Please enter your details and confirm to begin the exchange.")
+    st.info("Exchange is active. Enter your details to begin.")
 
 # --- Reset Button ---
 st.divider()
-if st.button("Start New Exchange", help="Click to reset the state and start over."):
-    reset_state()
-    st.rerun()
+if st.button("Start a new exchange"):
+    if st.warning("Are you sure? This will delete the current exchange."):
+        # Delete the document and rerun to reset the state.
+        exchange_ref.delete()
+        st.rerun()
