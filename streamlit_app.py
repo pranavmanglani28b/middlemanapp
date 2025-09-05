@@ -1,151 +1,133 @@
-import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Trade Middleman</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: auto; }
+        .trade-section { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
+        .exchanged { background: #e0ffe0; }
+        .hidden { display: none; }
+        label { display: block; margin-top: 10px; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 8px; margin-top: 4px; }
+        button { margin-top: 15px; padding: 10px 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Trade Middleman</h2>
+    <div id="join-section" class="trade-section">
+        <label for="tradeCode">Enter Trade Code to Join:</label>
+        <input type="text" id="tradeCode" maxlength="12" placeholder="Trade Code">
+        <button onclick="joinTrade()">Join Trade</button>
+        <div id="join-error" style="color:red; margin-top:10px;"></div>
+    </div>
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+    <div id="trade-section" class="trade-section hidden">
+        <h3>Trade Code: <span id="showTradeCode"></span></h3>
+        <label for="userName">Your Name:</label>
+        <input type="text" id="userName" maxlength="32" placeholder="Enter your name">
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+        <label for="userDetails">Your Details:</label>
+        <input type="text" id="userDetails" maxlength="128" placeholder="Enter your details">
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+        <button onclick="submitDetails()">Submit Details</button>
+        <div id="wait-msg" style="margin-top:10px;"></div>
+    </div>
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+    <div id="exchange-section" class="trade-section hidden exchanged">
+        <h3>Trade Complete!</h3>
+        <div>
+            <strong>Your Partner:</strong> <span id="partnerName"></span><br>
+            <strong>Partner's Details:</strong> <span id="partnerDetails"></span>
+        </div>
+    </div>
+</div>
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+<script>
+    // In-memory store for demo (would be server-side in real app)
+    const trades = {};
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+    let currentTradeCode = '';
+    let currentUserId = '';
+    let partnerUserId = '';
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+    function joinTrade() {
+        const code = document.getElementById('tradeCode').value.trim();
+        const errorDiv = document.getElementById('join-error');
+        if (!code) {
+            errorDiv.textContent = "Please enter a trade code.";
+            return;
+        }
+        errorDiv.textContent = "";
+        currentTradeCode = code;
+        currentUserId = Math.random().toString(36).substr(2, 9);
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+        // Create or join trade
+        if (!trades[code]) {
+            trades[code] = {};
+        }
+        if (Object.keys(trades[code]).length >= 2) {
+            errorDiv.textContent = "This trade code is full. Try another.";
+            return;
+        }
+        trades[code][currentUserId] = { name: '', details: '', ready: false };
 
-    return gdp_df
+        document.getElementById('join-section').classList.add('hidden');
+        document.getElementById('trade-section').classList.remove('hidden');
+        document.getElementById('showTradeCode').textContent = code;
 
-gdp_df = get_gdp_data()
+        pollForPartner();
+    }
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+    function submitDetails() {
+        const name = document.getElementById('userName').value.trim();
+        const details = document.getElementById('userDetails').value.trim();
+        if (!name || !details) {
+            alert("Please enter your name and details.");
+            return;
+        }
+        trades[currentTradeCode][currentUserId] = { name, details, ready: true };
+        document.getElementById('wait-msg').textContent = "Waiting for your trade partner to submit details...";
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+        pollForExchange();
+    }
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+    function pollForPartner() {
+        // Check if another user has joined
+        const interval = setInterval(() => {
+            const users = Object.keys(trades[currentTradeCode]);
+            if (users.length === 2) {
+                partnerUserId = users.find(uid => uid !== currentUserId);
+                clearInterval(interval);
+            }
+        }, 1000);
+    }
 
-# Add some spacing
-''
-''
+    function pollForExchange() {
+        // Wait for both users to be ready
+        const interval = setInterval(() => {
+            const trade = trades[currentTradeCode];
+            if (!trade) return;
+            const users = Object.keys(trade);
+            if (users.length < 2) return;
+            const partnerId = users.find(uid => uid !== currentUserId);
+            partnerUserId = partnerId;
+            if (trade[currentUserId].ready && trade[partnerId].ready) {
+                clearInterval(interval);
+                showExchange();
+            }
+        }, 1000);
+    }
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+    function showExchange() {
+        const trade = trades[currentTradeCode];
+        document.getElementById('trade-section').classList.add('hidden');
+        document.getElementById('exchange-section').classList.remove('hidden');
+        document.getElementById('partnerName').textContent = trade[partnerUserId].name;
+        document.getElementById('partnerDetails').textContent = trade[partnerUserId].details;
+    }
+</script>
+</body>
+</html>
