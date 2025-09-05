@@ -17,7 +17,7 @@ if 'user_a_data' not in st.session_state:
 st.title("🤝 Secure Exchange Middleman")
 st.markdown("This app facilitates a secure exchange of information between two parties. The data is only revealed when both parties have submitted and confirmed their details.")
 
-st.warning("Note: This app uses Streamlit's session_state for a simple demo. For a real-world application, a database would be required to manage sessions between different users and devices.")
+st.warning("Note: This app uses Streamlit's `session_state` for a simple demo. For a real-world application, a database would be required to manage sessions between different users and devices.")
 
 # --- User Selection ---
 st.header("Select Your Role")
@@ -46,7 +46,7 @@ with col1:
             st.session_state.user_a_data = user_a_input
             if st.button("Confirm Details (User A)", key="confirm_a", disabled=(user_role != 'User A')):
                 st.session_state.user_a_confirmed = True
-                st.experimental_rerun()
+                st.rerun()
     else:
         st.success("User A has confirmed their details.")
 
@@ -65,7 +65,7 @@ with col2:
             st.session_state.user_b_data = user_b_input
             if st.button("Confirm Details (User B)", key="confirm_b", disabled=(user_role != 'User B')):
                 st.session_state.user_b_confirmed = True
-                st.experimental_rerun()
+                st.rerun()
     else:
         st.success("User B has confirmed their details.")
 
@@ -97,4 +97,4 @@ else:
 st.divider()
 if st.button("Start New Exchange", help="Click to reset the state and start over."):
     reset_state()
-    st.experimental_rerun()
+    st.rerun()
