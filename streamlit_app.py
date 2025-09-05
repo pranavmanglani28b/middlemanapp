@@ -73,6 +73,10 @@ def get_exchange_status():
 
 exchange_data = get_exchange_status()
 
+# Handle the case where the document does not exist yet.
+if exchange_data is None:
+    exchange_data = {}
+
 # --- User Input Form ---
 if your_role == 'User A':
     my_data_key = 'user_a_data'
