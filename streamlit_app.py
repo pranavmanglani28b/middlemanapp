@@ -1,110 +1,74 @@
 import streamlit as st
-import requests
-import json
 from google.cloud import firestore
 from google.oauth2 import service_account
+import json
+import datetime
 
-# --- Firebase Configuration ---
-# Get API Key from secrets.toml
-# CORRECT - Use the descriptive key name you defined in secrets.toml
-FIREBASE_API_KEY = st.secrets["FIREBASE_API_KEY"] 
+# --- Firestore Client Initialization ---
 
-# Then, use this variable in your request URL
-SIGN_IN_URL = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
-
-# --- Firestore Setup (for demonstration/optional data retrieval) ---
-# NOTE: For deployment, you need to securely configure Firestore credentials.
-# Assuming you have a 'firestore-key.json' converted to a string in secrets.toml
-try:
-    key_dict = json.loads(st.secrets["textkey"]) # Example if using a key string
-    creds = service_account.Credentials.from_service_account_info(key_dict)
-    db = firestore.Client(credentials=creds)
-except KeyError:
-    # Fallback for local development or if only using Firebase Auth
-    db = None
-    st.info("Firestore client not fully configured. Only authentication is simulated.")
-
-
-# --- Authentication Functions ---
-def authenticate_user(email, password):
-    """Authenticates the user against Firebase Auth email/password."""
-    payload = {
-        "email": email,
-        "password": password,
-        "returnSecureToken": True
-    }
+# This function securely loads your service account credentials 
+# from st.secrets and initializes the Firestore client.
+@st.cache_resource
+def get_firestore_client():
+    """Initializes and returns a Firestore client object."""
     try:
-        response = requests.post(SIGN_IN_URL, json=payload)
-        response_data = response.json()
+        # Load the service account JSON string from st.secrets["textkey"]
+        key_dict = json.loads(st.secrets["textkey"])
         
-        if response.status_code == 200:
-            # Login successful
-            return True, response_data.get("idToken")
-        else:
-            # Login failed
-            error_message = response_data.get("error", {}).get("message", "Unknown error")
-            return False, error_message
-    except requests.exceptions.RequestException as e:
-        return False, f"Request failed: {e}"
+        # Use the credentials dictionary to create the Firestore client
+        creds = service_account.Credentials.from_service_account_info(key_dict)
+        db = firestore.Client(credentials=creds)
+        st.success("Successfully connected to Firestore!")
+        return db
+    except KeyError:
+        st.error(
+            "Configuration Error: 'textkey' not found in secrets.toml. "
+            "Please ensure you've copied your Firestore service account JSON into the file."
+        )
+        return None
+    except Exception as e:
+        st.error(f"Failed to initialize Firestore client: {e}")
+        return None
 
-# --- Streamlit App Layout ---
+# Get the database client
+db = get_firestore_client()
 
-st.title("Simple Streamlit & Firebase Login")
+# --- Streamlit UI and Data Submission Logic ---
 
-# Initialize session state for login status
-if 'authenticated' not in st.session_state:
-    st.session_state['authenticated'] = False
-    st.session_state['user_data'] = None
+st.title("Firestore Data Submission")
+st.markdown("Enter a name and a message below. The data will be sent directly to the `messages` collection in your Firestore database.")
 
-if not st.session_state['authenticated']:
-    # Show Login Form
-    with st.form("login_form"):
-        st.subheader("Login")
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Log In")
-
-        if submitted:
-            success, token_or_error = authenticate_user(email, password)
-            if success:
-                st.session_state['authenticated'] = True
-                st.session_state['user_data'] = {'email': email, 'token': token_or_error}
-                st.success("Login Successful! Redirecting...")
-                st.experimental_rerun() # Rerun to switch to the logged-in view
-            else:
-                st.error(f"Login Failed: {token_or_error}")
-
-else:
-    # Logged-in Content
-    st.subheader(f"Welcome back, {st.session_state['user_data']['email']}!")
-    
-    # Optional: Display some Firestore data (requires Firestore setup to be correct)
-    if db:
-        st.write("---")
-        st.subheader("Your User Data (from Firestore)")
+if db:
+    # Use a Streamlit form to group inputs and submission
+    with st.form(key='data_form'):
+        name = st.text_input("Your Name", max_chars=100)
+        message = st.text_area("Your Message", max_chars=500)
         
-        # Example: Fetch data from a 'users' collection using email as document ID
-        # NOTE: This is a simplification; use Firebase Auth UIDs for real-world lookups
-        doc_ref = db.collection('users').document(st.session_state['user_data']['email'])
-        try:
-            doc = doc_ref.get()
-            if doc.exists:
-                st.json(doc.to_dict())
-            else:
-                st.warning("No custom user profile found in Firestore.")
-                
-                # OPTIONAL: Create a user document if it doesn't exist
-                if st.button("Initialize User Profile in Firestore"):
-                    doc_ref.set({"email": st.session_state['user_data']['email'], "created_by_streamlit": True})
-                    st.success("Profile initialized. Rerun to view.")
-                    st.experimental_rerun()
+        submit_button = st.form_submit_button("Submit Data to Firestore")
+
+        if submit_button:
+            if name and message:
+                try:
+                    # Data dictionary to send to Firestore
+                    data = {
+                        "name": name,
+                        "message": message,
+                        "timestamp": datetime.datetime.now(tz=datetime.timezone.utc)
+                    }
+
+                    # Add the new document to the 'messages' collection
+                    # Firestore will automatically generate a document ID
+                    doc_ref = db.collection("messages").add(data)
                     
-        except Exception as e:
-            st.error(f"Error accessing Firestore: {e}")
-
-    # Logout Button
-    if st.button("Log Out"):
-        st.session_state['authenticated'] = False
-        st.session_state['user_data'] = None
-        st.info("Logged out.")
-        st.experimental_rerun()
+                    st.success(f"Data submitted successfully! Document ID: {doc_ref[1].id}")
+                    
+                    # Optional: Display the data sent
+                    st.subheader("Data Sent:")
+                    st.json(data)
+                    
+                except Exception as e:
+                    st.error(f"An error occurred during submission: {e}")
+            else:
+                st.warning("Please fill in both the Name and Message fields.")
+else:
+    st.warning("Cannot connect to the database. Please check your secrets configuration.")
