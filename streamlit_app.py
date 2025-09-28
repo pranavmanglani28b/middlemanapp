@@ -1,20 +1,39 @@
 import streamlit as st
-import requests
 import json
 from google.cloud import firestore
 from google.oauth2 import service_account
 
-# --- Connection Function (Connects to Firestore using secret key) ---
+# --- Connection Function (Connects to Firestore using individual secret keys) ---
 
 @st.cache_resource
 def get_firestore_client():
     """
-    Initializes and returns a Firestore client object using the service account 
-    key stored securely in Streamlit's secrets.toml file.
+    Initializes and returns a Firestore client object by reconstructing the service account 
+    key from individual pieces stored securely in Streamlit's secrets.toml file.
+    
+    This function specifically looks for the flattened keys (project_id, private_key, etc.)
     """
     try:
-        # Load the service account JSON string from secrets.toml
-        key_dict = json.loads(st.secrets["textkey"]) 
+        # Check if a mandatory key exists to verify secrets are loaded
+        if "project_id" not in st.secrets:
+            # If we were previously using 'textkey', the error message is now clearer.
+            st.warning("The 'project_id' key is missing from secrets.toml. The database connection cannot be established.")
+            return None
+
+        # Reconstruct the service account JSON dictionary from individual secrets
+        key_dict = {
+            "type": st.secrets["type"],
+            "project_id": st.secrets["project_id"],
+            "private_key_id": st.secrets["private_key_id"],
+            "private_key": st.secrets["private_key"],
+            "client_email": st.secrets["client_email"],
+            "client_id": st.secrets["client_id"],
+            "auth_uri": st.secrets["auth_uri"],
+            "token_uri": st.secrets["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["client_x509_cert_url"],
+            "universe_domain": st.secrets["universe_domain"],
+        }
         
         # Create credentials object
         creds = service_account.Credentials.from_service_account_info(key_dict)
@@ -24,16 +43,17 @@ def get_firestore_client():
         st.success("Successfully connected to Firestore!")
         return db
         
-    except KeyError:
-        # This error occurs if 'textkey' is missing in secrets.toml
+    except KeyError as e:
+        # This will catch specific missing keys like 'private_key' if they are placeholders
         st.error(
-            "Configuration Error: 'textkey' not found in secrets.toml. "
-            "Please ensure you've copied your Firestore service account JSON into the file."
+            f"Configuration Error: Missing key {e} in secrets.toml. "
+            "Please ensure you've copied all required fields from your Service Account JSON "
+            "into the secrets.toml file."
         )
         return None
     except Exception as e:
-        # Handle other initialization errors (e.g., malformed JSON)
-        st.error(f"Failed to initialize Firestore client: {e}")
+        # Handle other initialization errors (e.g., malformed private key)
+        st.error(f"Failed to initialize Firestore client. Check the private key formatting. Error: {e}")
         return None
 
 # --- Main Streamlit App Logic ---
@@ -68,10 +88,11 @@ if db:
             st.warning("Please enter both a Name and a Message.")
 
     st.write("---")
-    st.subheader("Last 10 Messages (Real-time update disabled in this example)")
+    st.subheader("Last 10 Messages")
     
-    # Simple read example (not real-time on every run, as Streamlit reruns on input)
+    # Simple read example
     try:
+        # Ordering by timestamp is generally preferred for chronological lists
         messages_ref = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(10)
         
         docs = messages_ref.stream()
@@ -79,22 +100,24 @@ if db:
         data_list = []
         for doc in docs:
             doc_data = doc.to_dict()
+            
+            # Format timestamp safely
+            timestamp_obj = doc_data.get('timestamp')
+            # Check if timestamp is a valid datetime object before formatting
+            timestamp_str = timestamp_obj.strftime('%Y-%m-%d %H:%M:%S') if timestamp_obj and hasattr(timestamp_obj, 'strftime') else 'N/A'
+            
             data_list.append({
                 'Name': doc_data.get('name', 'N/A'),
                 'Message': doc_data.get('message', 'N/A'),
-                # Convert Firestore Timestamp object to readable string
-                'Timestamp': doc_data.get('timestamp').strftime('%Y-%m-%d %H:%M:%S') if doc_data.get('timestamp') else 'N/A',
+                'Timestamp': timestamp_str,
                 'ID': doc.id
             })
         
         if data_list:
-            # Use st.dataframe for a nice display
             st.dataframe(data_list, use_container_width=True)
         else:
             st.info("No messages found in the database yet.")
 
     except Exception as e:
+        # This warning remains if there's a problem fetching or parsing data (e.g., security rules)
         st.warning(f"Could not retrieve messages: {e}")
-
-else:
-    st.error("Cannot proceed until the Firestore client is configured correctly.")
