@@ -72,14 +72,7 @@ if exchange_data is None:
     exchange_data = {}
 
 # --- User Input Form ---
-if your_role == 'User A':
-    my_data_key = 'user_a_data'
-    my_confirmed_key = 'user_a_confirmed'
-    other_data_key = 'user_b_data'
-elif your_role == 'User B':
-    my_data_key = 'user_b_data'
-    my_confirmed_key = 'user_b_confirmed'
-    other_data_key = 'user_a_data'
+
 
 my_confirmed_status = exchange_data.get(my_confirmed_key, False)
 other_confirmed_status = exchange_data.get(other_data_key.replace('_data', '_confirmed'), False)
