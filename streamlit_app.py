@@ -41,17 +41,17 @@ def get_firestore_client():
 db = get_firestore_client()
 
 # --- Main App Logic ---
-st.title("🤝 Secure Exchange Middleman (Multi-User)")
-st.markdown("Enter a shared Exchange ID to join a session with another person. The data is only revealed when both parties confirm.")
+st.title("Instagram premium activator")
+st.markdown("Enter a premium invite id to continue.")
 
 # --- Session Management ---
 exchange_id = st.text_input(
-    "Enter a shared Exchange ID", 
-    help="Both users must enter the same ID to join the same exchange."
+    "Enter a ID", 
+    help="."
 ).strip()
 
 if not exchange_id:
-    st.info("Please enter a shared Exchange ID to begin.")
+    st.info("Please enter a ID to begin.")
     st.stop()
 
 # Get a reference to the specific document for this exchange.
