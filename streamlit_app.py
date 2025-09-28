@@ -4,23 +4,7 @@ from google.oauth2 import service_account
 import json
 import datetime
 
-# --- Firestore Client Initialization ---
-correct = """@st.cache_resource
-def get_firestore_client():
-    """Initializes and returns a Firestore client object."""
-    try:
-        # This is the line that throws the error if the key doesn't exist
-        key_dict = json.loads(st.secrets["textkey"]) 
-        
-        # ... rest of connection logic ...
-        
-        return db
-    except KeyError:
-        st.error(
-            "Configuration Error: 'textkey' not found in secrets.toml. "
-            "Please ensure you've copied your Firestore service account JSON into the file."
-        )
-        return None"""
+
 # This function securely loads your service account credentials 
 # from st.secrets and initializes the Firestore client.
 @st.cache_resource
