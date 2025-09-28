@@ -57,13 +57,7 @@ if not exchange_id:
 # Get a reference to the specific document for this exchange.
 exchange_ref = db.collection("exchanges").document(exchange_id)
 
-# --- User Roles and Data ---
-st.header("Your Information")
-your_role = st.radio(
-    "Are you User A or User B?",
-    ('User A', 'User B'),
-    key="user_role"
-)
+
 
 # Fetch the current state of the exchange from Firestore.
 @st.cache_data(show_spinner="Fetching exchange status...")
