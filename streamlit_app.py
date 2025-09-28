@@ -5,7 +5,7 @@ from firebase_admin import credentials, firestore
 st.set_page_config(page_title="Firebase Login Demo")
 st.title("🔐 Simple Firebase Login Page")
 
-# 🔑 Paste your Firebase service account JSON here
+# i have harcoded the json not very secure though hehe-pranav at 28/09/25
 firebase_key = {
   "type": "service_account",
   "project_id": "middleman-bcc1e",
