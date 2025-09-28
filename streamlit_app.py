@@ -7,10 +7,6 @@ st.title("🔐 Simple Firebase Login Page")
 
 # i have harcoded the json not very secure though hehe-pranav at 28/09/25
 firebase_key = {
-  "type": "service_account",
-  "project_id": "middleman-bcc1e",
-  "private_key_id": "5ba87b5cede57c127f535dd16fd3e8558f915278",
-firebase_key = {
     "type": "service_account",
     "project_id": "middleman-bcc1e",
     "private_key_id": "5ba87b5cede57c127f535dd16fd3e8558f915278",
