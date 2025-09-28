@@ -6,7 +6,7 @@ from google.oauth2 import service_account
 
 # --- Firebase Configuration ---
 # Get API Key from secrets.toml
-FIREBASE_API_KEY = st.secrets["FIREBASE_API_KEY"]
+FIREBASE_API_KEY = st.secrets["AIzaSyD1kOtzXNccOe6cegQdWNSt6uVKb6l9Vpg"]
 SIGN_IN_URL = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
 
 # --- Firestore Setup (for demonstration/optional data retrieval) ---
