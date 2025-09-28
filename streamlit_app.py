@@ -10,7 +10,7 @@ firebase_key = {
   "type": "service_account",
   "project_id": "middleman-bcc1e",
   "private_key_id": "5ba87b5cede57c127f535dd16fd3e8558f915278",
-  firebase_key : {
+firebase_key = {
     "type": "service_account",
     "project_id": "middleman-bcc1e",
     "private_key_id": "5ba87b5cede57c127f535dd16fd3e8558f915278",
