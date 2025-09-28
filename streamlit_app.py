@@ -1,124 +1,107 @@
 import streamlit as st
-import firebase_admin
-from firebase_admin import credentials
-from firebase_admin import firestore
+import requests
 import json
-import time
-st.set_page_config('Middleman Service')
-# --- Setup Instructions ---
-# 1. Go to Firebase Console (https://console.firebase.google.com/)
-# 2. Create a new project.
-# 3. Go to Project Settings -> Service Accounts.
-# 4. Click "Generate new private key".
-# 5. This will download a JSON file. Rename it to `firebase_key.json` and save it in the same directory as this script.
-# 6. Go to Firestore Database and create a new database in "production mode".
-# 7. Add security rules to allow read/write access for demonstration purposes:
-#    rules_version = '2';
-#    service cloud.firestore {
-#      match /databases/{database}/documents {
-#        match /{document=**} {
-#          allow read, write: if true;
-#        }
-#      }
-#    }
+from google.cloud import firestore
+from google.oauth2 import service_account
 
-@st.cache_resource
-def get_firestore_client():
-    """Initializes and returns a Firebase Firestore client."""
+# --- Firebase Configuration ---
+# Get API Key from secrets.toml
+FIREBASE_API_KEY = st.secrets["FIREBASE_API_KEY"]
+SIGN_IN_URL = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
+
+# --- Firestore Setup (for demonstration/optional data retrieval) ---
+# NOTE: For deployment, you need to securely configure Firestore credentials.
+# Assuming you have a 'firestore-key.json' converted to a string in secrets.toml
+try:
+    key_dict = json.loads(st.secrets["textkey"]) # Example if using a key string
+    creds = service_account.Credentials.from_service_account_info(key_dict)
+    db = firestore.Client(credentials=creds)
+except KeyError:
+    # Fallback for local development or if only using Firebase Auth
+    db = None
+    st.info("Firestore client not fully configured. Only authentication is simulated.")
+
+
+# --- Authentication Functions ---
+def authenticate_user(email, password):
+    """Authenticates the user against Firebase Auth email/password."""
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
     try:
-        # Load the Firebase service account key from the file.
-        # This file should be placed in the same directory as this script.
-        # For security, you should use environment variables in production.
-        cred = credentials.Certificate("firebase_key.json")
-        firebase_admin.initialize_app(cred)
-    except ValueError as e:
-        if "The default Firebase app already exists" not in str(e):
-            st.error(f"Error initializing Firebase: {e}. Please ensure 'firebase_key.json' is in the correct location and is a valid service account file.")
-            st.stop()
-    return firestore.client()
+        response = requests.post(SIGN_IN_URL, json=payload)
+        response_data = response.json()
+        
+        if response.status_code == 200:
+            # Login successful
+            return True, response_data.get("idToken")
+        else:
+            # Login failed
+            error_message = response_data.get("error", {}).get("message", "Unknown error")
+            return False, error_message
+    except requests.exceptions.RequestException as e:
+        return False, f"Request failed: {e}"
 
-# --- Initialize Firestore Client ---
-db = get_firestore_client()
+# --- Streamlit App Layout ---
 
-# --- Main App Logic ---
-st.title("Instagram premium activator")
-st.markdown("Enter a premium invite id to continue.")
+st.title("Simple Streamlit & Firebase Login")
 
-# --- Session Management ---
-exchange_id = st.text_input(
-    "Enter a ID", 
-    help="."
-).strip()
+# Initialize session state for login status
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+    st.session_state['user_data'] = None
 
-if not exchange_id:
-    st.info("Please enter a ID to begin.")
-    st.stop()
+if not st.session_state['authenticated']:
+    # Show Login Form
+    with st.form("login_form"):
+        st.subheader("Login")
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Log In")
 
-# Get a reference to the specific document for this exchange.
-exchange_ref = db.collection("exchanges").document(exchange_id)
-
-
-
-# Fetch the current state of the exchange from Firestore.
-@st.cache_data(show_spinner="Fetching exchange status...")
-def get_exchange_status():
-    doc = exchange_ref.get()
-    return doc.to_dict() if doc.exists else None
-
-exchange_data = get_exchange_status()
-
-# Handle the case where the document does not exist yet.
-if exchange_data is None:
-    exchange_data = {}
-
-# --- User Input Form ---
-
-
-my_confirmed_status = exchange_data.get(my_confirmed_key, False)
-other_confirmed_status = exchange_data.get(other_data_key.replace('_data', '_confirmed'), False)
-
-if not my_confirmed_status:
-    my_input = st.text_area(
-        f"Enter your information here ({your_role}):",
-        value=exchange_data.get(my_data_key, ""),
-        height=150,
-        key="my_area"
-    )
-
-    if st.button("Confirm Details"):
-        with st.spinner("Uploading data and confirming..."):
-            exchange_ref.set({
-                my_data_key: my_input,
-                my_confirmed_key: True
-            }, merge=True)
-        st.success("Details confirmed. Waiting for the other party.")
-        st.rerun()
-else:
-    st.success(f"{your_role} has confirmed their details.")
-
-# --- Exchange Status ---
-st.divider()
-st.header("Exchange Status")
-
-if my_confirmed_status and other_confirmed_status:
-    st.balloons()
-    st.success("✅ Exchange complete! Both parties have confirmed.")
-    st.info("Here is the information from the other party:")
-    st.code(exchange_data.get(other_data_key, "No data available."), language="text")
-
-elif exchange_data.get('user_a_confirmed', False) or exchange_data.get('user_b_confirmed', False):
-    st.info("Waiting for both parties to confirm their details...")
-    # Add a refresh button for the user to check the status.
-    if st.button("Check for Updates"):
-        st.rerun()
+        if submitted:
+            success, token_or_error = authenticate_user(email, password)
+            if success:
+                st.session_state['authenticated'] = True
+                st.session_state['user_data'] = {'email': email, 'token': token_or_error}
+                st.success("Login Successful! Redirecting...")
+                st.experimental_rerun() # Rerun to switch to the logged-in view
+            else:
+                st.error(f"Login Failed: {token_or_error}")
 
 else:
-    st.info("Exchange is active. Enter your details to begin.")
+    # Logged-in Content
+    st.subheader(f"Welcome back, {st.session_state['user_data']['email']}!")
+    
+    # Optional: Display some Firestore data (requires Firestore setup to be correct)
+    if db:
+        st.write("---")
+        st.subheader("Your User Data (from Firestore)")
+        
+        # Example: Fetch data from a 'users' collection using email as document ID
+        # NOTE: This is a simplification; use Firebase Auth UIDs for real-world lookups
+        doc_ref = db.collection('users').document(st.session_state['user_data']['email'])
+        try:
+            doc = doc_ref.get()
+            if doc.exists:
+                st.json(doc.to_dict())
+            else:
+                st.warning("No custom user profile found in Firestore.")
+                
+                # OPTIONAL: Create a user document if it doesn't exist
+                if st.button("Initialize User Profile in Firestore"):
+                    doc_ref.set({"email": st.session_state['user_data']['email'], "created_by_streamlit": True})
+                    st.success("Profile initialized. Rerun to view.")
+                    st.experimental_rerun()
+                    
+        except Exception as e:
+            st.error(f"Error accessing Firestore: {e}")
 
-# --- Reset Button ---
-st.divider()
-if st.button("Start a new exchange"):
-    if st.warning("Are you sure? This will delete the current exchange."):
-        # Delete the document and rerun to reset the state.
-        exchange_ref.delete()
-        st.rerun()
+    # Logout Button
+    if st.button("Log Out"):
+        st.session_state['authenticated'] = False
+        st.session_state['user_data'] = None
+        st.info("Logged out.")
+        st.experimental_rerun()
