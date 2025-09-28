@@ -41,7 +41,7 @@ Zrsgi24daAkSguJSCG8fOK0Hj70G3wbG94dKXaECgYEAmjWuFD3jNbZJjpO+aCBw
 anT4kTp7OtIpA7Ga59QfUeNrcnz4DjCkSAJmpd3gtOld6WH5ij0iI4r3v0jN1pIp
 mnZtWu/hAyniNKorqpgSxQuyhKEZ/2MoVwVjibq8gZ8bkYjkqXcqVfHxps4zTJD3
 MtA8WhM/1RO9zrrnyCkWf80=
------END PRIVATE KEY-----""",
+-----END PRIVATE KEY-----"""},
   "client_email": "firebase-adminsdk-fbsvc@middleman-bcc1e.iam.gserviceaccount.com",
   "client_id": "114049452833380016606",
   "auth_uri": "https://accounts.google.com/o/oauth2/auth",
